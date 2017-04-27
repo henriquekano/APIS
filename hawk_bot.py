@@ -3,13 +3,21 @@ import requests
 import json
 import slack_wrapper
 
+config_path = './config.json'
+# {}
+def read_config():
+	with open(config_path) as data_file:    
+		data = json.load(data_file)
+	return data
+
+config = read_config()
 creds = {
-	'email' : '',
-	'password' : '',
-	'subdomain': ''
+	'email' : config.get('configs').get('zendesk').get('account_email'),
+	'password' : config.get('configs').get('zendesk').get('account_password'),
+	'subdomain': config.get('configs').get('zendesk').get('subdomain')
 }
-zendesk_support_group_id = ''
-slack_token = ''
+zendesk_support_group_id = config.get('configs').get('zendesk').get('group_id')
+slack_token = config.get('configs').get('slack').get('oauth_token')
 
 # [Ticket]
 def support_open_tickets(creds):
@@ -60,18 +68,24 @@ def format_metrics_message(metrics):
 	formatted_metrics = list(map(format, metrics))
 	return formatted_metrics
 
+def filter_dude(dudes, email):
+	def filter_function(dude):
+		return dude.get('email') == email
+	return list(filter(filter_function, dudes))
+
+
 for support_ticket in support_open_tickets(creds):
 	r = ticket_sla(support_ticket.id, creds)
 	policy_metrics = r.json()['ticket']['slas']['policy_metrics']
-	achieved_metrics = filter_achieved_metrics(policy_metrics)
+	achieved_metrics = filter_near_achieve_metrics(policy_metrics)
 	if achieved_metrics:
-		message = "Ticket {0}({1}): {2}".format(
-			support_ticket.id,
-			support_ticket.assignee.name,
-			str(
-				json.dumps(
-					format_metrics_message(achieved_metrics)
-				)
+		dudes = filter_dude(read_config().get('configs').get('dudes'), support_ticket.assignee.email)
+		if dudes:
+			at_name = dudes[0].get('slack').get('at_name')
+			dm_channel = dudes[0].get('slack').get('dm_id')
+			message = "Ticket {0}( {1} ): {2}".format(
+				"https://pagarme.zendesk.com/agent/tickets/" + str(support_ticket.id),
+				" @" + at_name,
+				":tada:"
 			)
-		)
-		slack_wrapper.message_channel(slack_token, "#realsuporte", message)
+			slack_wrapper.message_channel(slack_token, dm_channel, message)
