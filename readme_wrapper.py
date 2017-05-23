@@ -1,4 +1,10 @@
+# -*- coding: utf-8 -*-
+
 import requests
+import json
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 class ReadmeClient:
 
@@ -40,5 +46,17 @@ class ReadmeClient:
 		with requests.Session() as session:
 			self._get_session(session)
 			url = self._get_url(page)
-			response.put(url, json=new_params)
+			response = session.put(url, json=new_params)
 		return response
+
+	def backup_page(self, file_name, pages):
+		with open(file_name, 'w') as file:
+			for page in pages:
+				response = self.get_page(page)
+				page_json = response.json()
+				body = page_json.get('body')
+				page_json['body'] = body
+				page_json_string = json.dumps(page_json, indent=4, ensure_ascii=False)
+				file.write(page)
+				file.write(page_json_string)
+		return true

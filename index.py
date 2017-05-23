@@ -1,18 +1,24 @@
+# -*- coding: utf-8 -*-
+
 import re
 import json
 from readme_wrapper import ReadmeClient
 
 def convert_parameters(curl_string):
-	endpoint = re.search(r'curl[\S\s]*?http[\S]+', curl_string).group()
-	regex = re.compile(r'(?<=\')[^\=\']+=[^\']+')
-	parameters = regex.findall(curl_string)
-	json_dict = {}
-	for parameter in parameters:
-		key_valor = parameter.split('=')
-		json_dict[key_valor[0]] = key_valor[1]
-	pretty_printed_json = json.dumps(json_dict, indent=4, sort_keys=True)
-	formatted_curl = endpoint + " -H 'content-type: application/json' \n -d '" + pretty_printed_json + "'"
-	return formatted_curl
+	print(curl_string)
+	try:
+		endpoint = re.search(r'curl[\S\s]*?http[\S]+', curl_string).group()
+		regex = re.compile(r'(?<=\')[^\=\']+=[^\']+')
+		parameters = regex.findall(curl_string)
+		json_dict = {}
+		for parameter in parameters:
+			key_valor = parameter.split('=')
+			json_dict[key_valor[0]] = key_valor[1]
+		pretty_printed_json = json.dumps(json_dict, indent=4, sort_keys=True)
+		formatted_curl = endpoint + " -H 'content-type: application/json' -d '" + pretty_printed_json + "'"
+		return formatted_curl
+	except Exception as e:
+		return curl_string
 
 with open('config.json', 'r') as file:
 	readme_configs = json.load(file).get('readme')
@@ -39,7 +45,6 @@ pages = [
 "/docs/split-rules",
 "/docs/overview-recorrencia",
 "/docs/quickstart",
-"/docs/criando-um-plano",
 "/docs/criando-uma-assinatura",
 "/docs/fluxo-de-cobranca",
 "/docs/overview-gerenciamento-de-saldo",
@@ -71,20 +76,33 @@ pages = [
 "/docs/referencia-completa-da-api",
 ]
 
-response = client.get_page('/docs/criando-um-plano')
-body = response.json().get('body')
 
-# regex = re.compile(r'(?<=\[block:code\])[\S\s]*?(?=\[/block\])')
 
 def replace_lambda(match):
-	string_match = match.group()
-	codes = json.loads(string_match).get('codes')
-	curl_code = filter(lambda item: 
-		item.get('language') == 'curl', 
-		codes
-	)
-	curl_code[0]['code'] = convert_parameters(codes[0].get('code'))
-	return json.dumps({ 'codes': codes}, indent=4)
+	if match is not None:
+		string_match = match.group()
+		codes = json.loads(string_match).get('codes')
+		curl_code = filter(lambda item: 
+			item.get('language') == 'curl', 
+			codes
+		)
+		if curl_code:
+			curl_code[0]['code'] = convert_parameters(codes[0].get('code'))
+			return json.dumps({ 'codes': codes}, indent=4)
+		else:
+			return match.group()
+	else:
+		return ''
 
-replaced_body = re.sub(r'(?<=\[block:code\])[\S\s]*?(?=\[/block\])', replace_lambda, body)
-print(replaced_body)
+# client.backup_page('backup.txt', pages)
+for page in pages:
+	print(page)
+	response = client.get_page(page)
+	original_page = response.json()
+	body = original_page.get('body')
+	replaced_body = re.sub(r'(?<=\[block:code\])[\S\s]*?(?=\[/block\])', replace_lambda, body)
+
+	original_page['body'] = replaced_body
+	new_page = original_page
+	response = client.put_page(page, new_page)
+
